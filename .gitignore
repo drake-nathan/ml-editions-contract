@@ -1,0 +1,14 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+proofs
+arguments.js
+allowlistFinal.js
+
+# Hardhat files
+cache
+artifacts
+
