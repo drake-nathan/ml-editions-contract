@@ -1,6 +1,7 @@
 import '@nomicfoundation/hardhat-toolbox';
 import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-etherscan';
+import '@openzeppelin/hardhat-upgrades';
 
 import { HardhatUserConfig } from 'hardhat/config';
 import { config as configDotenv } from 'dotenv';
@@ -36,6 +37,9 @@ const config: HardhatUserConfig = {
   },
   etherscan: {
     apiKey: etherscanApiKey,
+  },
+  mocha: {
+    timeout: 50000,
   },
 };
 

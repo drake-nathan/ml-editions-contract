@@ -1,12 +1,14 @@
 import { ethers } from 'hardhat';
 
 const main = async () => {
-  const TestToken = await ethers.getContractFactory('TestToken');
+  const RektMemelordsEditions = await ethers.getContractFactory(
+    'RektMemelordsEditions',
+  );
 
   console.log('Deploying TestToken Contract...');
-  const testToken = await TestToken.deploy();
-  await testToken.deployed();
-  console.log('MemeLordDistrict deployed to:', testToken.address);
+  const rektMemelordsEditions = await RektMemelordsEditions.deploy();
+  await rektMemelordsEditions.deployed();
+  console.log('MemeLordDistrict deployed to:', rektMemelordsEditions.address);
 };
 
 main()
