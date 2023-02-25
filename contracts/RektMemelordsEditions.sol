@@ -21,31 +21,35 @@ contract RektMemelordsEditions is
   ERC2981Upgradeable,
   DefaultOperatorFiltererUpgradeable
 {
-  bytes32 public constant URI_SETTER_ROLE = keccak256('URI_SETTER_ROLE');
-  bytes32 public constant PAUSER_ROLE = keccak256('PAUSER_ROLE');
+  bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
   bytes32 public constant MINTER_ROLE = keccak256('MINTER_ROLE');
 
   /**
    * @notice The next token id to be minted
    */
-  uint16 public nextEdition = 0;
+  uint16 public nextEdition;
 
   /**
-   * @notice Mapping from token ID to max supply
+   * @dev Mapping from token ID to max supply
    */
-  mapping(uint16 => uint32) public maxSupplies;
+  mapping(uint16 => uint32) public maxSupply;
 
   /**
-   * @notice Mapping from token ID to token URI
+   * @dev Mapping from token ID to token URI
    */
-  mapping(uint16 => string) public tokenURIs;
+  mapping(uint16 => string) _tokenURIs;
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
     _disableInitializers();
   }
 
-  function initialize(address projectWallet) public initializer {
+  function initialize(
+    address royaltySafe,
+    address devWallet,
+    address hmooreWallet,
+    address saintWallet
+  ) public initializer {
     __ERC1155_init('');
     __AccessControl_init();
     __Pausable_init();
@@ -54,56 +58,70 @@ contract RektMemelordsEditions is
     __ERC2981_init();
     __DefaultOperatorFilterer_init();
 
-    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-    _grantRole(URI_SETTER_ROLE, msg.sender);
-    _grantRole(PAUSER_ROLE, msg.sender);
-    _grantRole(MINTER_ROLE, msg.sender);
-    _setDefaultRoyalty(projectWallet, 500);
+    _grantRole(DEFAULT_ADMIN_ROLE, hmooreWallet);
+    _grantRole(ADMIN_ROLE, devWallet);
+    _grantRole(ADMIN_ROLE, hmooreWallet);
+    _grantRole(ADMIN_ROLE, saintWallet);
+    _grantRole(MINTER_ROLE, hmooreWallet);
+    _grantRole(MINTER_ROLE, saintWallet);
+
+    _setDefaultRoyalty(royaltySafe, 500);
+
+    nextEdition = 0;
   }
 
-  function setURI(string memory newuri) public onlyRole(URI_SETTER_ROLE) {
-    _setURI(newuri);
-  }
-
-  function pause() public onlyRole(PAUSER_ROLE) {
+  function pause() public onlyRole(ADMIN_ROLE) {
     _pause();
   }
 
-  function unpause() public onlyRole(PAUSER_ROLE) {
+  function unpause() public onlyRole(ADMIN_ROLE) {
     _unpause();
   }
+
+  /**
+   *
+   * @param royaltyAddress address of the royalty receiver
+   * @param royaltyBps royalty amount in basis points (500 = 5%)
+   */
+  function setRoyaltyInfo(
+    address royaltyAddress,
+    uint96 royaltyBps
+  ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+    _setDefaultRoyalty(royaltyAddress, royaltyBps);
+  }
+
+  function setTokenURI(
+    uint16 id,
+    string memory newuri
+  ) public onlyRole(ADMIN_ROLE) {
+    _tokenURIs[id] = newuri;
+  }
+
+  function uri(uint256 id) public view override returns (string memory) {
+    return _tokenURIs[uint16(id)];
+  }
+
+  // function initNextToken(
+  //   uint32 maxSupply,
+  //   string memory tokenURI
+  // ) public onlyRole(ADMIN_ROLE) {
+  //   require(maxSupply > 0, 'maxSupply must be greater than 0');
+  //   require(
+  //     maxSupplies[nextEdition] == 0,
+  //     'nextEdition must not have been initialized'
+  //   );
+
+  //   maxSupplies[nextEdition] = maxSupply;
+  //   tokenURIs[nextEdition] = tokenURI;
+  //   nextEdition++;
+  // }
 
   function mint(
     address account,
     uint256 id,
-    uint256 amount,
-    bytes memory data
+    uint256 amount
   ) public onlyRole(MINTER_ROLE) {
-    _mint(account, id, amount, data);
-  }
-
-  function mintBatch(
-    address to,
-    uint256[] memory ids,
-    uint256[] memory amounts,
-    bytes memory data
-  ) public onlyRole(MINTER_ROLE) {
-    _mintBatch(to, ids, amounts, data);
-  }
-
-  function initNextToken(
-    uint32 maxSupply,
-    string memory tokenURI
-  ) public onlyRole(MINTER_ROLE) {
-    require(maxSupply > 0, 'maxSupply must be greater than 0');
-    require(
-      maxSupplies[nextEdition] == 0,
-      'nextEdition must not have been initialized'
-    );
-
-    maxSupplies[nextEdition] = maxSupply;
-    tokenURIs[nextEdition] = tokenURI;
-    nextEdition++;
+    _mint(account, id, amount, '');
   }
 
   function _beforeTokenTransfer(
