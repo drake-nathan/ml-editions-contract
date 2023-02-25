@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+/// @title: Rekt Memelords Editions
+/// @author: Nathan Drake
 pragma solidity ^0.8.17;
 
 import '@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol';
@@ -10,7 +12,10 @@ import '@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol'
 import 'operator-filter-registry/src/upgradeable/DefaultOperatorFiltererUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 
-/// @custom:security-contact nathan@drakewest.dev
+error TokenNotInitialized(uint16 id);
+error NotCurrentEdition(uint16 id);
+error ExceedsMaxSupply(uint16 id, uint32 requested, uint32 maxSupply);
+
 contract RektMemelordsEditions is
   Initializable,
   ERC1155Upgradeable,
@@ -24,15 +29,20 @@ contract RektMemelordsEditions is
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
   bytes32 public constant MINTER_ROLE = keccak256('MINTER_ROLE');
 
-  /**
-   * @notice The next token id to be minted
-   */
-  uint16 public nextEdition;
+  /// @notice The current edition that can be minted
+  uint16 public currentEdition;
 
   /**
    * @dev Mapping from token ID to max supply
    */
   mapping(uint16 => uint32) public maxSupply;
+
+  /**
+   * @dev Mapping from token ID to current supply
+   */
+  mapping(uint16 => uint32) public totalySupply;
+
+  uint16[] _tokenIdsMinted;
 
   /**
    * @dev Mapping from token ID to token URI
@@ -67,7 +77,7 @@ contract RektMemelordsEditions is
 
     _setDefaultRoyalty(royaltySafe, 500);
 
-    nextEdition = 0;
+    currentEdition = 0;
   }
 
   function pause() public onlyRole(ADMIN_ROLE) {
@@ -86,14 +96,14 @@ contract RektMemelordsEditions is
   function setRoyaltyInfo(
     address royaltyAddress,
     uint96 royaltyBps
-  ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+  ) external onlyRole(DEFAULT_ADMIN_ROLE) {
     _setDefaultRoyalty(royaltyAddress, royaltyBps);
   }
 
   function setTokenURI(
     uint16 id,
     string memory newuri
-  ) public onlyRole(ADMIN_ROLE) {
+  ) external onlyRole(ADMIN_ROLE) {
     _tokenURIs[id] = newuri;
   }
 
@@ -101,27 +111,77 @@ contract RektMemelordsEditions is
     return _tokenURIs[uint16(id)];
   }
 
-  // function initNextToken(
-  //   uint32 maxSupply,
-  //   string memory tokenURI
-  // ) public onlyRole(ADMIN_ROLE) {
-  //   require(maxSupply > 0, 'maxSupply must be greater than 0');
-  //   require(
-  //     maxSupplies[nextEdition] == 0,
-  //     'nextEdition must not have been initialized'
-  //   );
+  function tokenIdsMinted() external view returns (uint16[] memory) {
+    return _tokenIdsMinted;
+  }
 
-  //   maxSupplies[nextEdition] = maxSupply;
-  //   tokenURIs[nextEdition] = tokenURI;
-  //   nextEdition++;
-  // }
+  function setMaxSupply(
+    uint16 id,
+    uint32 newMaxSupply
+  ) public onlyRole(ADMIN_ROLE) {
+    maxSupply[id] = newMaxSupply;
+  }
+
+  /**
+   * @notice Sets the current edition that can be minted
+   */
+  function setCurrentEdition(uint16 newEdition) external onlyRole(ADMIN_ROLE) {
+    currentEdition = newEdition;
+  }
+
+  function initializeEdition(
+    uint16 tokenToInit,
+    uint32 tokenMaxSupply,
+    string memory tokenURI
+  ) external onlyRole(ADMIN_ROLE) {
+    require(tokenMaxSupply > 0, 'maxSupply must be greater than 0');
+    require(bytes(tokenURI).length > 0, 'tokenURI must not be empty string');
+    require(maxSupply[tokenToInit] == 0, 'edition already initialized');
+
+    maxSupply[tokenToInit] = tokenMaxSupply;
+    _tokenURIs[tokenToInit] = tokenURI;
+    currentEdition = tokenToInit;
+  }
+
+  modifier hasBeenInitialized(uint16 id) {
+    if (maxSupply[id] == 0) {
+      revert TokenNotInitialized(id);
+    }
+    _;
+  }
+
+  modifier isCurrentEdition(uint16 id) {
+    if (id != currentEdition) {
+      revert NotCurrentEdition(id);
+    }
+    _;
+  }
+
+  modifier doesNotExceedMaxSupply(uint16 id, uint32 amount) {
+    if (totalySupply[id] + amount > maxSupply[id]) {
+      revert ExceedsMaxSupply(id, amount, maxSupply[id]);
+    }
+    _;
+  }
 
   function mint(
     address account,
     uint256 id,
     uint256 amount
-  ) public onlyRole(MINTER_ROLE) {
+  )
+    external
+    onlyRole(MINTER_ROLE)
+    whenNotPaused
+    hasBeenInitialized(uint16(id))
+    isCurrentEdition(uint16(id))
+    doesNotExceedMaxSupply(uint16(id), uint32(amount))
+  {
     _mint(account, id, amount, '');
+    totalySupply[uint16(id)] += uint32(amount);
+    // if tokenIdsMinted does not contain this token id, add it
+    if (totalySupply[uint16(id)] == amount) {
+      _tokenIdsMinted.push(uint16(id));
+    }
   }
 
   function _beforeTokenTransfer(

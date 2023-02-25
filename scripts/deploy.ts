@@ -5,7 +5,7 @@ const main = async () => {
     'RektMemelordsEditions',
   );
 
-  console.log('Deploying TestToken Contract...');
+  console.log('Deploying RektMemelordsEditions Contract...');
   const rektMemelordsEditions = await RektMemelordsEditions.deploy();
   await rektMemelordsEditions.deployed();
   console.log('MemeLordDistrict deployed to:', rektMemelordsEditions.address);
