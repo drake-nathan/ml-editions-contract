@@ -10,4 +10,7 @@ export interface StoreFrontArgs {
   allowlistRoot: string;
   payees: string[];
   paymentShares: number[];
+  devWallet: string;
+  hmooreWallet: string;
+  saintWallet: string;
 }

@@ -46,12 +46,18 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     address tokenAddress,
     bytes32 allowlistRoot,
     address[] memory payees,
-    uint256[] memory paymentShares
+    uint256[] memory paymentShares,
+    address devWallet,
+    address hmooreWallet,
+    address saintWallet
   ) PaymentSplitter(payees, paymentShares) {
     _allowlistRoot = allowlistRoot;
     token = ITokenContract(tokenAddress);
 
-    _grantRole(ADMIN_ROLE, msg.sender);
+    _grantRole(DEFAULT_ADMIN_ROLE, hmooreWallet);
+    _grantRole(ADMIN_ROLE, devWallet);
+    _grantRole(ADMIN_ROLE, hmooreWallet);
+    _grantRole(ADMIN_ROLE, saintWallet);
   }
 
   function pause() public onlyRole(ADMIN_ROLE) {
@@ -67,9 +73,7 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     token = ITokenContract(tokenAddress);
   }
 
-  /**
-   * @notice 0 = Closed, 1 = PreSale, 2 = PublicSalew
-   */
+  /// @notice 0 = Closed, 1 = PreSale, 2 = PublicSalew
   function setMintPhase(MintPhase phase) public onlyRole(ADMIN_ROLE) {
     mintPhase = phase;
   }
@@ -109,7 +113,6 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     if (msg.value < totalSale) {
       revert InsufficientPayment({sent: msg.value, required: totalSale});
     }
-
     _;
   }
 
@@ -124,7 +127,6 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
         maxSupply: 10000
       });
     }
-
     _;
   }
 

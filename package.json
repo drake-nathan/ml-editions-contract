@@ -10,7 +10,10 @@
     "compile": "yarn hardhat compile",
     "deploy": "yarn compile && yarn hardhat run scripts/deploy.ts --network mainnet",
     "verify": "yarn hardhat verify --constructor-args arguments.js --network mainnet 0x924F2a4D3e93cC595792292C84A41Ad3AEd70E95",
-    "test": "yarn hardhat test"
+    "test": "yarn hardhat test",
+    "test:coverage": "yarn hardhat coverage",
+    "test:store": "yarn hardhat test test/MemelordStorefront.test.ts",
+    "test:token": "yarn hardhat test test/RektMemelordsEditions.test.ts"
   },
   "devDependencies": {
     "@ethersproject/abi": "^5.7.0",
