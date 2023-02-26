@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// @title: Rekt Memelords Editions
-/// @author: Nathan Drake
+/// @author: Nathan Drake <nathan@drakewest.dev>
 pragma solidity ^0.8.17;
 
 import '@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol';
@@ -32,9 +32,7 @@ contract RektMemelordsEditions is
   /// @notice The current edition that can be minted
   uint16 public currentEdition;
 
-  /**
-   * @dev Mapping from token ID to max supply
-   */
+  /// @dev Mapping from token ID to max supply
   mapping(uint16 => uint32) public maxSupply;
 
   /**
@@ -72,6 +70,8 @@ contract RektMemelordsEditions is
     _grantRole(ADMIN_ROLE, devWallet);
     _grantRole(ADMIN_ROLE, hmooreWallet);
     _grantRole(ADMIN_ROLE, saintWallet);
+
+    _setRoleAdmin(MINTER_ROLE, ADMIN_ROLE);
     _grantRole(MINTER_ROLE, hmooreWallet);
     _grantRole(MINTER_ROLE, saintWallet);
 
@@ -122,9 +122,7 @@ contract RektMemelordsEditions is
     maxSupply[id] = newMaxSupply;
   }
 
-  /**
-   * @notice Sets the current edition that can be minted
-   */
+  /// @notice Sets the current edition that can be minted
   function setCurrentEdition(uint16 newEdition) external onlyRole(ADMIN_ROLE) {
     currentEdition = newEdition;
   }
@@ -132,7 +130,7 @@ contract RektMemelordsEditions is
   function initializeEdition(
     uint16 tokenToInit,
     uint32 tokenMaxSupply,
-    string memory tokenURI
+    string calldata tokenURI
   ) external onlyRole(ADMIN_ROLE) {
     require(tokenMaxSupply > 0, 'maxSupply must be greater than 0');
     require(bytes(tokenURI).length > 0, 'tokenURI must not be empty string');

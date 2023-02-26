@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
-/// @title: HDL Genesis Token Storefront
-/// @author: Nathan Drake
+/// @title: Rekt Memelords Storefront
+/// @author: Nathan Drake <nathan@drakewest.dev>
 pragma solidity ^0.8.17;
 
 import '@openzeppelin/contracts/security/Pausable.sol';
@@ -9,6 +9,12 @@ import '@openzeppelin/contracts/finance/PaymentSplitter.sol';
 import '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
 
 interface ITokenContract {
+  function initializeEdition(
+    uint16 id,
+    uint32 maxSupply,
+    string memory uri
+  ) external;
+
   function mint(address to, uint256 id, uint256 amount) external;
 
   function totalSupply(uint16 id) external returns (uint32 supply);
@@ -94,6 +100,15 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
 
   function setAllowlistRoot(bytes32 merkleRoot) external onlyRole(ADMIN_ROLE) {
     _allowlistRoot = merkleRoot;
+  }
+
+  function setupMint(
+    uint16 id,
+    uint32 maxSupply,
+    string calldata uri
+  ) external onlyRole(ADMIN_ROLE) {
+    token.initializeEdition(id, maxSupply, uri);
+    currentEditionId = id;
   }
 
   modifier whenValidTokenCount(uint8 numberOfTokens) {

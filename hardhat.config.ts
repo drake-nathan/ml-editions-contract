@@ -2,14 +2,16 @@ import '@nomicfoundation/hardhat-toolbox';
 import '@nomiclabs/hardhat-ethers';
 import '@nomiclabs/hardhat-etherscan';
 import '@openzeppelin/hardhat-upgrades';
+import 'hardhat-gas-reporter';
 
-import { HardhatUserConfig } from 'hardhat/config';
 import { config as configDotenv } from 'dotenv';
+import type { HardhatUserConfig } from 'hardhat/config';
 
 configDotenv();
 const mainnetRpcUrl = process.env.MAINNET_RPC_URL;
 const goerliRpcUrl = process.env.GOERLI_RPC_URL;
 const etherscanApiKey = process.env.ETHERSCAN_API_KEY;
+const coinmarketcapApiKey = process.env.COINMARKETCAP_API_KEY;
 const testnetPrivateKey = process.env.TESTNET_PRIVATE_KEY;
 const mainnetPrivateKey = process.env.MAINNET_PRIVATE_KEY;
 
@@ -17,6 +19,7 @@ if (
   !mainnetRpcUrl ||
   !goerliRpcUrl ||
   !etherscanApiKey ||
+  !coinmarketcapApiKey ||
   !testnetPrivateKey ||
   !mainnetPrivateKey
 ) {
@@ -43,6 +46,11 @@ const config: HardhatUserConfig = {
   },
   mocha: {
     timeout: 50000,
+  },
+  gasReporter: {
+    enabled: process.env.REPORT_GAS ? true : false,
+    currency: 'ETH',
+    coinmarketcap: coinmarketcapApiKey,
   },
 };
 

@@ -207,6 +207,32 @@ describe('RektMemelordsEditions contract', () => {
           ),
         ).to.equal(false);
       });
+
+      it('default admin can grant minter role to non-admin', async () => {
+        await tokenContract
+          .connect(hmooreWallet)
+          .grantRole(await tokenContract.MINTER_ROLE(), nonOwner2.address);
+
+        expect(
+          await tokenContract.hasRole(
+            await tokenContract.MINTER_ROLE(),
+            nonOwner2.address,
+          ),
+        ).to.equal(true);
+      });
+
+      it('admin can grant minter role', async () => {
+        await tokenContract
+          .connect(devWallet)
+          .grantRole(await tokenContract.MINTER_ROLE(), nonOwner1.address);
+
+        expect(
+          await tokenContract.hasRole(
+            await tokenContract.MINTER_ROLE(),
+            nonOwner1.address,
+          ),
+        ).to.equal(true);
+      });
     });
   });
 

@@ -46,13 +46,8 @@ describe('MemelordStorefront contract', () => {
       tokenAddress: '',
       allowlistRoot:
         '0x6e0181871788dd911c8f4e6ee4e342fecbd704ca4f0790639478bd00098513f5',
-      payees: [
-        devWallet.address,
-        hmooreWallet.address,
-        saintWallet.address,
-        royaltySafe.address,
-      ],
-      paymentShares: [1, 4, 4, 1],
+      payees: [devWallet.address, royaltySafe.address],
+      paymentShares: [1, 9],
       devWallet: devWallet.address,
       hmooreWallet: hmooreWallet.address,
       saintWallet: saintWallet.address,
@@ -66,11 +61,27 @@ describe('MemelordStorefront contract', () => {
     storefrontContract = await (
       await deployStoreFrontContract(storefrontArgs)
     ).deployed();
+
+    const tokenMinterRole = await tokenContract.MINTER_ROLE();
+    await tokenContract
+      .connect(devWallet)
+      .grantRole(tokenMinterRole, storefrontContract.address);
   });
 
   describe('Deployment', () => {
-    it('Should deploy the storefront contract', async () => {
-      expect(storefrontContract.address).to.be.a('string');
+    it('should deploy the storefront contract', async () => {
+      expect(storefrontContract.address).to.be.a.properAddress;
+    });
+
+    it('should grant storefront contract minter role on token contract', async () => {
+      const tokenMinterRole = await tokenContract.MINTER_ROLE();
+
+      expect(
+        await tokenContract.hasRole(
+          tokenMinterRole,
+          storefrontContract.address,
+        ),
+      ).to.equal(true);
     });
   });
 
