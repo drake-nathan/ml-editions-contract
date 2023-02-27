@@ -10,19 +10,25 @@ import {
   deployStoreFrontContract,
 } from '../scripts/deployers';
 import type { TokenArgs, StoreFrontArgs } from '../scripts/args';
+import { buildProofs, Proof } from '../scripts/generate-merkle-tree';
 
 describe('MemelordStorefront contract', () => {
   let tokenContract: RektMemelordsEditions;
   let storefrontContract: MemelordStorefront;
+  let testTokenArgs: TokenArgs;
+  let storefrontArgs: StoreFrontArgs;
+  let proofs: Proof[];
+
   let deployer: SignerWithAddress;
   let royaltySafe: SignerWithAddress;
   let devWallet: SignerWithAddress;
   let hmooreWallet: SignerWithAddress;
   let saintWallet: SignerWithAddress;
-  let nonOwner1: SignerWithAddress;
-  let nonOwner2: SignerWithAddress;
-  let testTokenArgs: TokenArgs;
-  let storefrontArgs: StoreFrontArgs;
+  let normie1: SignerWithAddress;
+  let normie2: SignerWithAddress;
+  let allowlist1: SignerWithAddress;
+  let allowlist2: SignerWithAddress;
+  let allowlist3: SignerWithAddress;
 
   before(async () => {
     [
@@ -31,9 +37,21 @@ describe('MemelordStorefront contract', () => {
       devWallet,
       hmooreWallet,
       saintWallet,
-      nonOwner1,
-      nonOwner2,
+      normie1,
+      normie2,
+      allowlist1,
+      allowlist2,
+      allowlist3,
     ] = await ethers.getSigners();
+
+    const allowlist = [
+      allowlist1.address,
+      allowlist2.address,
+      allowlist3.address,
+    ];
+    let allowlistRoot: string;
+
+    ({ proofs, allowlistRoot } = buildProofs(allowlist));
 
     testTokenArgs = {
       royaltySafe: royaltySafe.address,
@@ -44,8 +62,7 @@ describe('MemelordStorefront contract', () => {
 
     storefrontArgs = {
       tokenAddress: '',
-      allowlistRoot:
-        '0x6e0181871788dd911c8f4e6ee4e342fecbd704ca4f0790639478bd00098513f5',
+      allowlistRoot,
       payees: [devWallet.address, royaltySafe.address],
       paymentShares: [1, 9],
       devWallet: devWallet.address,
@@ -88,9 +105,9 @@ describe('MemelordStorefront contract', () => {
   describe('Pausable', () => {
     it('cannot be paused by non-admin', async () => {
       await expect(
-        storefrontContract.connect(nonOwner1).pause(),
+        storefrontContract.connect(normie1).pause(),
       ).to.be.revertedWith(
-        `AccessControl: account ${nonOwner1.address.toLowerCase()} is missing role ${await storefrontContract.ADMIN_ROLE()}`,
+        `AccessControl: account ${normie1.address.toLowerCase()} is missing role ${await storefrontContract.ADMIN_ROLE()}`,
       );
 
       expect(await storefrontContract.paused()).to.equal(false);
