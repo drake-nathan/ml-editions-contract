@@ -6,11 +6,20 @@ export interface TokenArgs {
 }
 
 export interface StoreFrontArgs {
+  delegateAddress: string;
+  mldAddress: string;
   tokenAddress: string;
-  allowlistRoot: string;
   payees: string[];
   paymentShares: number[];
   devWallet: string;
   hmooreWallet: string;
   saintWallet: string;
+}
+
+export interface MldArgs {
+  _merkleRoot: string;
+  projectWallet: string;
+  nateWallet: string;
+  saintWallet: string;
+  hmooreWallet: string;
 }

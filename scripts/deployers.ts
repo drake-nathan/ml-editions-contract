@@ -4,8 +4,10 @@ import type {
   RektMemelordsEditions,
   MemelordStorefront__factory,
   MemelordStorefront,
+  MemeLordDistrict__factory,
+  MemeLordDistrict,
 } from '../typechain-types';
-import type { StoreFrontArgs, TokenArgs } from './args';
+import type { MldArgs, StoreFrontArgs, TokenArgs } from './args';
 
 export const deployTokenContract = async (
   args: TokenArgs,
@@ -31,8 +33,9 @@ export const deployStoreFrontContract = async (
 
   const storeFrontContract: MemelordStorefront =
     (await StoreFrontFactory.deploy(
+      args.delegateAddress,
+      args.mldAddress,
       args.tokenAddress,
-      args.allowlistRoot,
       args.payees,
       args.paymentShares,
       args.devWallet,
@@ -41,4 +44,22 @@ export const deployStoreFrontContract = async (
     )) as MemelordStorefront;
 
   return storeFrontContract;
+};
+
+export const deployMldContract = async (
+  args: MldArgs,
+): Promise<MemeLordDistrict> => {
+  const MldFactory = (await ethers.getContractFactory(
+    'MemeLordDistrict',
+  )) as MemeLordDistrict__factory;
+
+  const mldContract: MemeLordDistrict = (await MldFactory.deploy(
+    args._merkleRoot,
+    args.projectWallet,
+    args.nateWallet,
+    args.saintWallet,
+    args.hmooreWallet,
+  )) as MemeLordDistrict;
+
+  return mldContract;
 };

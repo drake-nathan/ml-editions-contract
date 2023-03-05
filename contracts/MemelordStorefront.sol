@@ -6,7 +6,13 @@ pragma solidity ^0.8.17;
 import '@openzeppelin/contracts/security/Pausable.sol';
 import '@openzeppelin/contracts/access/AccessControl.sol';
 import '@openzeppelin/contracts/finance/PaymentSplitter.sol';
-import '@openzeppelin/contracts/utils/cryptography/MerkleProof.sol';
+import './IDelegationRegistry.sol';
+
+interface IMldContract {
+  function ownerOf(uint256 tokenId) external view returns (address owner);
+
+  function totalSuppy() external view returns (uint256 totalSupply);
+}
 
 interface ITokenContract {
   function initializeEdition(
@@ -22,48 +28,57 @@ interface ITokenContract {
   function maxSupply(uint16 id) external returns (uint32 supply);
 }
 
-enum MintPhase {
-  Closed,
-  PreSale,
-  PublicSale
-}
-
 error MaxTokensPerTransactionExceeded(uint256 requested, uint256 maximum);
 error InsufficientPayment(uint256 sent, uint256 required);
 error TotalSupplyExceeded(uint16 id, uint32 requested, uint32 maxSupply);
-error InvalidMerkleProof();
+error DelegateNotValid(address delegate);
+error UnequalClaimTokens(uint256 sent, uint256 required);
+error NotOwnerOfMldToken(uint16 tokenId);
+error TokenClaimed(uint16 tokenId);
+error MintClosed();
 
 contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   // roles
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
+
   // mint state
-  uint256 public mintPrice = 0.069 ether;
-  uint256 public discountPrice = 0.042 ether;
+  uint256 public mintPrice = 0.042 ether;
   uint16 public maxPurchaseCount = 10;
-  MintPhase public mintPhase = MintPhase.Closed;
-  uint16 public currentEditionId = 0;
+  uint16 public currentEdition = 0;
+  uint256 public mintStart = 1690000000;
+  uint256 public mintEnd = 1690000001;
 
-  bytes32 _allowlistRoot;
+  // create mapping of token ids used to claim
+  mapping(uint16 => bool) public claimed;
 
-  // token contract
+  // delegate cash, mld, token contract
+  IDelegationRegistry dc;
+  IMldContract mld;
   ITokenContract token;
 
+  // private vars
+  address private _mldAddress;
+
   constructor(
+    address delegateAddress,
+    address mldAddress,
     address tokenAddress,
-    bytes32 allowlistRoot,
     address[] memory payees,
     uint256[] memory paymentShares,
     address devWallet,
     address hmooreWallet,
     address saintWallet
   ) PaymentSplitter(payees, paymentShares) {
-    _allowlistRoot = allowlistRoot;
+    dc = IDelegationRegistry(delegateAddress);
+    mld = IMldContract(mldAddress);
     token = ITokenContract(tokenAddress);
 
     _grantRole(DEFAULT_ADMIN_ROLE, hmooreWallet);
     _grantRole(ADMIN_ROLE, devWallet);
     _grantRole(ADMIN_ROLE, hmooreWallet);
     _grantRole(ADMIN_ROLE, saintWallet);
+
+    _mldAddress = mldAddress;
   }
 
   function pause() public onlyRole(ADMIN_ROLE) {
@@ -74,14 +89,13 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     _unpause();
   }
 
+  function isMintOpen() public view returns (bool) {
+    return block.timestamp >= mintStart && block.timestamp <= mintEnd;
+  }
+
   // Setters
   function setTokenAddress(address tokenAddress) external onlyRole(ADMIN_ROLE) {
     token = ITokenContract(tokenAddress);
-  }
-
-  /// @notice 0 = Closed, 1 = PreSale, 2 = PublicSalew
-  function setMintPhase(MintPhase phase) public onlyRole(ADMIN_ROLE) {
-    mintPhase = phase;
   }
 
   function setMaxPurchaseCount(uint16 newCount) external onlyRole(ADMIN_ROLE) {
@@ -92,23 +106,58 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     mintPrice = newPrice;
   }
 
-  function setDiscountMintPrice(
-    uint256 newPrice
-  ) external onlyRole(ADMIN_ROLE) {
-    discountPrice = newPrice;
+  function setCurrentEditionId(uint16 id) external onlyRole(ADMIN_ROLE) {
+    currentEdition = id;
   }
 
-  function setAllowlistRoot(bytes32 merkleRoot) external onlyRole(ADMIN_ROLE) {
-    _allowlistRoot = merkleRoot;
+  /// @param mintStart_ - set mint start unix timestamp
+  function setMintStart(uint256 mintStart_) external onlyRole(ADMIN_ROLE) {
+    mintStart = mintStart_;
   }
 
+  /// @param mintEnd_ - set mint end unix timestamp
+  function setMintEnd(uint256 mintEnd_) external onlyRole(ADMIN_ROLE) {
+    mintEnd = mintEnd_;
+  }
+
+  /// @notice - manually set claimed status for token id
+  function setClaimed(uint16 id) external onlyRole(ADMIN_ROLE) {
+    claimed[id] = true;
+  }
+
+  // resetters
+  /// @notice - manually reset claimed status for token id
+  function resetClaimed(uint16 id) external onlyRole(ADMIN_ROLE) {
+    claimed[id] = false;
+  }
+
+  function resetClaimedList() external onlyRole(ADMIN_ROLE) {
+    uint256 _mldMaxToken = mld.totalSuppy();
+
+    for (uint16 i = 0; i < _mldMaxToken; i++) {
+      claimed[i] = false;
+    }
+  }
+
+  /**
+   * @notice - setup mint on storefront contract, and initialize edition on token contract
+   * @param id - ERC1155 edition id for token contract
+   * @param maxSupply - max supply for edition
+   * @param startTime_ - unix timestamp for start of mint
+   * @param endTime_ - unix timestamp for end of mint
+   * @param uri - uri for edition
+   */
   function setupMint(
     uint16 id,
     uint32 maxSupply,
+    uint256 startTime_,
+    uint256 endTime_,
     string calldata uri
   ) external onlyRole(ADMIN_ROLE) {
     token.initializeEdition(id, maxSupply, uri);
-    currentEditionId = id;
+    currentEdition = id;
+    mintStart = startTime_;
+    mintEnd = endTime_;
   }
 
   modifier whenValidTokenCount(uint8 numberOfTokens) {
@@ -118,7 +167,6 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
         maximum: maxPurchaseCount
       });
     }
-
     _;
   }
 
@@ -132,12 +180,12 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   }
 
   modifier whenTotalSupplyNotReached(uint8 numberOfTokens) {
-    uint32 totalSupply = token.totalSupply(currentEditionId);
-    uint32 maxSupply = token.maxSupply(currentEditionId);
+    uint32 totalSupply = token.totalSupply(currentEdition);
+    uint32 maxSupply = token.maxSupply(currentEdition);
 
     if (totalSupply + numberOfTokens > maxSupply) {
       revert TotalSupplyExceeded({
-        id: currentEditionId,
+        id: currentEdition,
         requested: numberOfTokens,
         maxSupply: 10000
       });
@@ -145,40 +193,74 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     _;
   }
 
-  function mintTokens(
+  modifier whenMintOpen() {
+    if (!isMintOpen()) {
+      revert MintClosed();
+    }
+    _;
+  }
+
+  /**
+   *
+   * @param to - address to send tokens to
+   * @param numberOfTokens - number of tokens to mint
+   * @param mldClaimTokenIds - array of MLD token ids using to claim, must be 1:1 with numberOfTokens, and must be owner or delegate of those tokens
+   * @param _vault - optional vault address for delegate.cash
+   */
+  function claim(
     address to,
-    uint8 numberOfTokens
+    uint8 numberOfTokens,
+    uint16[] calldata mldClaimTokenIds,
+    address _vault
   )
     public
     payable
     whenNotPaused
+    whenMintOpen
     whenValidTokenCount(numberOfTokens)
     whenSufficientValue(numberOfTokens)
     whenTotalSupplyNotReached(numberOfTokens)
   {
-    token.mint(to, currentEditionId, numberOfTokens);
+    address requester = msg.sender;
+
+    if (_vault != address(0)) {
+      bool isDelegateValid = dc.checkDelegateForContract(
+        requester,
+        _vault,
+        _mldAddress
+      );
+
+      if (!isDelegateValid) {
+        revert DelegateNotValid({delegate: requester});
+      }
+
+      requester = _vault;
+    }
+
+    if (mldClaimTokenIds.length != numberOfTokens) {
+      revert UnequalClaimTokens({
+        sent: mldClaimTokenIds.length,
+        required: numberOfTokens
+      });
+    }
+
+    for (uint8 i = 0; i < numberOfTokens; i++) {
+      uint16 tokenId = mldClaimTokenIds[i];
+
+      if (claimed[tokenId]) {
+        revert TokenClaimed({tokenId: tokenId});
+      }
+
+      if (mld.ownerOf(tokenId) != requester) {
+        revert NotOwnerOfMldToken({tokenId: tokenId});
+      }
+    }
+
+    token.mint(to, currentEdition, numberOfTokens);
+
+    for (uint8 i = 0; i < numberOfTokens; i++) {
+      uint16 tokenId = mldClaimTokenIds[i];
+      claimed[tokenId] = true;
+    }
   }
-
-  // function mintPresale(
-  //   uint8 numberOfTokens,
-  //   bytes32[] calldata merkleProof
-  // )
-  //   external
-  //   payable
-  //   whenNotPaused
-  //   whenValidTokenCount(numberOfTokens)
-  //   whenSufficientValue(numberOfTokens)
-  // {
-  //   if (
-  //     !MerkleProof.verify(
-  //       merkleProof,
-  //       _allowlistRoot,
-  //       keccak256(abi.encodePacked(_msgSender()))
-  //     )
-  //   ) {
-  //     revert InvalidMerkleProof();
-  //   }
-
-  //   token.mintTokens(numberOfTokens, _msgSender());
-  // }
 }
