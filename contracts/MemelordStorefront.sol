@@ -11,45 +11,45 @@ import './IDelegationRegistry.sol';
 interface IMldContract {
   function ownerOf(uint256 tokenId) external view returns (address owner);
 
-  function totalSuppy() external view returns (uint256 totalSupply);
+  function totalSupply() external view returns (uint256 totalSupply);
 }
 
 interface ITokenContract {
   function initializeEdition(
-    uint16 id,
-    uint32 maxSupply,
+    uint256 id,
+    uint256 maxSupply,
     string memory uri
   ) external;
 
   function mint(address to, uint256 id, uint256 amount) external;
 
-  function totalSupply(uint16 id) external returns (uint32 supply);
+  function currentSupply(uint256 id) external returns (uint256 supply);
 
-  function maxSupply(uint16 id) external returns (uint32 supply);
+  function maxSupply(uint256 id) external returns (uint256 supply);
 }
 
 error MaxTokensPerTransactionExceeded(uint256 requested, uint256 maximum);
 error InsufficientPayment(uint256 sent, uint256 required);
-error TotalSupplyExceeded(uint16 id, uint32 requested, uint32 maxSupply);
+error TotalSupplyExceeded(uint256 id, uint256 requested, uint256 maxSupply);
 error DelegateNotValid(address delegate);
-error UnequalClaimTokens(uint256 sent, uint256 required);
-error NotOwnerOfMldToken(uint16 tokenId);
-error TokenClaimed(uint16 tokenId);
+error NotOwnerOfMldToken(address requester, uint256 tokenId);
+error TokenClaimed(uint256 tokenId);
 error MintClosed();
 
 contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   // roles
   bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
 
-  // mint state
+  // state
+  address public tokenAddress;
   uint256 public mintPrice = 0.042 ether;
-  uint16 public maxPurchaseCount = 10;
-  uint16 public currentEdition = 0;
+  uint256 public mintPerMld = 1;
+  uint256 public currentEdition = 0;
   uint256 public mintStart = 1690000000;
   uint256 public mintEnd = 1690000001;
 
   // create mapping of token ids used to claim
-  mapping(uint16 => bool) public claimed;
+  mapping(uint256 => bool) public claimed;
 
   // delegate cash, mld, token contract
   IDelegationRegistry dc;
@@ -62,13 +62,16 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   constructor(
     address delegateAddress,
     address mldAddress,
-    address tokenAddress,
+    address tokenAddress_,
     address[] memory payees,
     uint256[] memory paymentShares,
     address devWallet,
     address hmooreWallet,
     address saintWallet
   ) PaymentSplitter(payees, paymentShares) {
+    tokenAddress = tokenAddress_;
+    _mldAddress = mldAddress;
+
     dc = IDelegationRegistry(delegateAddress);
     mld = IMldContract(mldAddress);
     token = ITokenContract(tokenAddress);
@@ -77,8 +80,6 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     _grantRole(ADMIN_ROLE, devWallet);
     _grantRole(ADMIN_ROLE, hmooreWallet);
     _grantRole(ADMIN_ROLE, saintWallet);
-
-    _mldAddress = mldAddress;
   }
 
   function pause() public onlyRole(ADMIN_ROLE) {
@@ -94,19 +95,21 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   }
 
   // Setters
-  function setTokenAddress(address tokenAddress) external onlyRole(ADMIN_ROLE) {
+  /// @param tokenAddress_ - new token address
+  function setTokenAddress(
+    address tokenAddress_
+  ) external onlyRole(ADMIN_ROLE) {
+    tokenAddress = tokenAddress_;
     token = ITokenContract(tokenAddress);
   }
 
-  function setMaxPurchaseCount(uint16 newCount) external onlyRole(ADMIN_ROLE) {
-    maxPurchaseCount = newCount;
-  }
-
-  function setBaseMintPrice(uint256 newPrice) external onlyRole(ADMIN_ROLE) {
+  /// @param newPrice - new mint price in wei
+  function setMintPrice(uint256 newPrice) external onlyRole(ADMIN_ROLE) {
     mintPrice = newPrice;
   }
 
-  function setCurrentEditionId(uint16 id) external onlyRole(ADMIN_ROLE) {
+  /// @param id - set current edition id to mint on token contract
+  function setCurrentEditionId(uint256 id) external onlyRole(ADMIN_ROLE) {
     currentEdition = id;
   }
 
@@ -120,21 +123,27 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     mintEnd = mintEnd_;
   }
 
+  /// @param mintPerMld_ - set mint per mld token
+  function setMintPerMld(uint256 mintPerMld_) external onlyRole(ADMIN_ROLE) {
+    mintPerMld = mintPerMld_;
+  }
+
   /// @notice - manually set claimed status for token id
-  function setClaimed(uint16 id) external onlyRole(ADMIN_ROLE) {
+  function setClaimed(uint256 id) external onlyRole(ADMIN_ROLE) {
     claimed[id] = true;
   }
 
   // resetters
   /// @notice - manually reset claimed status for token id
-  function resetClaimed(uint16 id) external onlyRole(ADMIN_ROLE) {
+  function resetClaimed(uint256 id) external onlyRole(ADMIN_ROLE) {
     claimed[id] = false;
   }
 
+  /// @notice - reset claimed status for all token ids, not recommended
   function resetClaimedList() external onlyRole(ADMIN_ROLE) {
-    uint256 _mldMaxToken = mld.totalSuppy();
+    uint256 _mldMaxToken = mld.totalSupply();
 
-    for (uint16 i = 0; i < _mldMaxToken; i++) {
+    for (uint256 i = 0; i < _mldMaxToken; i++) {
       claimed[i] = false;
     }
   }
@@ -148,8 +157,8 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
    * @param uri - uri for edition
    */
   function setupMint(
-    uint16 id,
-    uint32 maxSupply,
+    uint256 id,
+    uint256 maxSupply,
     uint256 startTime_,
     uint256 endTime_,
     string calldata uri
@@ -160,17 +169,7 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     mintEnd = endTime_;
   }
 
-  modifier whenValidTokenCount(uint8 numberOfTokens) {
-    if (numberOfTokens > maxPurchaseCount) {
-      revert MaxTokensPerTransactionExceeded({
-        requested: numberOfTokens,
-        maximum: maxPurchaseCount
-      });
-    }
-    _;
-  }
-
-  modifier whenSufficientValue(uint8 numberOfTokens) {
+  modifier whenSufficientValue(uint256 numberOfTokens) {
     uint256 totalSale = mintPrice * numberOfTokens;
 
     if (msg.value < totalSale) {
@@ -179,15 +178,15 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     _;
   }
 
-  modifier whenTotalSupplyNotReached(uint8 numberOfTokens) {
-    uint32 totalSupply = token.totalSupply(currentEdition);
-    uint32 maxSupply = token.maxSupply(currentEdition);
+  modifier whenTotalSupplyNotReached(uint256 numberOfTokens) {
+    uint256 totalSupply = token.currentSupply(currentEdition);
+    uint256 maxSupply = token.maxSupply(currentEdition);
 
     if (totalSupply + numberOfTokens > maxSupply) {
       revert TotalSupplyExceeded({
         id: currentEdition,
         requested: numberOfTokens,
-        maxSupply: 10000
+        maxSupply: maxSupply
       });
     }
     _;
@@ -200,26 +199,29 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     _;
   }
 
+  function _mintCount(
+    uint256[] calldata mldClaimTokenIds
+  ) internal view returns (uint256) {
+    return mintPerMld * mldClaimTokenIds.length;
+  }
+
   /**
    *
    * @param to - address to send tokens to
-   * @param numberOfTokens - number of tokens to mint
    * @param mldClaimTokenIds - array of MLD token ids using to claim, must be 1:1 with numberOfTokens, and must be owner or delegate of those tokens
    * @param _vault - optional vault address for delegate.cash
    */
   function claim(
     address to,
-    uint8 numberOfTokens,
-    uint16[] calldata mldClaimTokenIds,
+    uint256[] calldata mldClaimTokenIds,
     address _vault
   )
     public
     payable
     whenNotPaused
     whenMintOpen
-    whenValidTokenCount(numberOfTokens)
-    whenSufficientValue(numberOfTokens)
-    whenTotalSupplyNotReached(numberOfTokens)
+    whenSufficientValue(_mintCount(mldClaimTokenIds))
+    whenTotalSupplyNotReached(_mintCount(mldClaimTokenIds))
   {
     address requester = msg.sender;
 
@@ -237,29 +239,25 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
       requester = _vault;
     }
 
-    if (mldClaimTokenIds.length != numberOfTokens) {
-      revert UnequalClaimTokens({
-        sent: mldClaimTokenIds.length,
-        required: numberOfTokens
-      });
-    }
+    uint256 numberOfClaims = mldClaimTokenIds.length;
+    uint256 numberOfTokens = _mintCount(mldClaimTokenIds);
 
-    for (uint8 i = 0; i < numberOfTokens; i++) {
-      uint16 tokenId = mldClaimTokenIds[i];
+    for (uint256 i = 0; i < numberOfClaims; i++) {
+      uint256 tokenId = mldClaimTokenIds[i];
 
       if (claimed[tokenId]) {
         revert TokenClaimed({tokenId: tokenId});
       }
 
       if (mld.ownerOf(tokenId) != requester) {
-        revert NotOwnerOfMldToken({tokenId: tokenId});
+        revert NotOwnerOfMldToken({requester: requester, tokenId: tokenId});
       }
     }
 
     token.mint(to, currentEdition, numberOfTokens);
 
-    for (uint8 i = 0; i < numberOfTokens; i++) {
-      uint16 tokenId = mldClaimTokenIds[i];
+    for (uint256 i = 0; i < numberOfClaims; i++) {
+      uint256 tokenId = mldClaimTokenIds[i];
       claimed[tokenId] = true;
     }
   }

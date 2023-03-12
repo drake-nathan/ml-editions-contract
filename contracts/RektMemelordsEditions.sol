@@ -12,9 +12,9 @@ import '@openzeppelin/contracts-upgradeable/token/common/ERC2981Upgradeable.sol'
 import 'operator-filter-registry/src/upgradeable/DefaultOperatorFiltererUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 
-error TokenNotInitialized(uint16 id);
-error NotCurrentEdition(uint16 id);
-error ExceedsMaxSupply(uint16 id, uint32 requested, uint32 maxSupply);
+error TokenNotInitialized(uint256 id);
+error NotCurrentEdition(uint256 id);
+error ExceedsMaxSupply(uint256 id, uint256 requested, uint256 maxSupply);
 
 contract RektMemelordsEditions is
   Initializable,
@@ -30,22 +30,22 @@ contract RektMemelordsEditions is
   bytes32 public constant MINTER_ROLE = keccak256('MINTER_ROLE');
 
   /// @notice The current edition that can be minted
-  uint16 public currentEdition;
+  uint256 public currentEdition;
 
   /// @dev Mapping from token ID to max supply
-  mapping(uint16 => uint32) public maxSupply;
+  mapping(uint256 => uint256) public maxSupply;
 
   /**
    * @dev Mapping from token ID to current supply
    */
-  mapping(uint16 => uint32) public totalySupply;
+  mapping(uint256 => uint256) public currentSupply;
 
-  uint16[] _tokenIdsMinted;
+  uint256[] _tokenIdsMinted;
 
   /**
    * @dev Mapping from token ID to token URI
    */
-  mapping(uint16 => string) _tokenURIs;
+  mapping(uint256 => string) _tokenURIs;
 
   /// @custom:oz-upgrades-unsafe-allow constructor
   constructor() {
@@ -101,35 +101,35 @@ contract RektMemelordsEditions is
   }
 
   function setTokenURI(
-    uint16 id,
+    uint256 id,
     string memory newuri
   ) external onlyRole(ADMIN_ROLE) {
     _tokenURIs[id] = newuri;
   }
 
   function uri(uint256 id) public view override returns (string memory) {
-    return _tokenURIs[uint16(id)];
+    return _tokenURIs[uint256(id)];
   }
 
-  function tokenIdsMinted() external view returns (uint16[] memory) {
+  function tokenIdsMinted() external view returns (uint256[] memory) {
     return _tokenIdsMinted;
   }
 
   function setMaxSupply(
-    uint16 id,
-    uint32 newMaxSupply
+    uint256 id,
+    uint256 newMaxSupply
   ) public onlyRole(ADMIN_ROLE) {
     maxSupply[id] = newMaxSupply;
   }
 
   /// @notice Sets the current edition that can be minted
-  function setCurrentEdition(uint16 newEdition) external onlyRole(ADMIN_ROLE) {
+  function setCurrentEdition(uint256 newEdition) external onlyRole(ADMIN_ROLE) {
     currentEdition = newEdition;
   }
 
   function initializeEdition(
-    uint16 tokenToInit,
-    uint32 tokenMaxSupply,
+    uint256 tokenToInit,
+    uint256 tokenMaxSupply,
     string calldata tokenURI
   ) external onlyRole(ADMIN_ROLE) {
     require(tokenMaxSupply > 0, 'maxSupply must be greater than 0');
@@ -141,22 +141,22 @@ contract RektMemelordsEditions is
     currentEdition = tokenToInit;
   }
 
-  modifier hasBeenInitialized(uint16 id) {
+  modifier hasBeenInitialized(uint256 id) {
     if (maxSupply[id] == 0) {
       revert TokenNotInitialized(id);
     }
     _;
   }
 
-  modifier isCurrentEdition(uint16 id) {
+  modifier isCurrentEdition(uint256 id) {
     if (id != currentEdition) {
       revert NotCurrentEdition(id);
     }
     _;
   }
 
-  modifier doesNotExceedMaxSupply(uint16 id, uint32 amount) {
-    if (totalySupply[id] + amount > maxSupply[id]) {
+  modifier doesNotExceedMaxSupply(uint256 id, uint256 amount) {
+    if (currentSupply[id] + amount > maxSupply[id]) {
       revert ExceedsMaxSupply(id, amount, maxSupply[id]);
     }
     _;
@@ -170,15 +170,15 @@ contract RektMemelordsEditions is
     external
     onlyRole(MINTER_ROLE)
     whenNotPaused
-    hasBeenInitialized(uint16(id))
-    isCurrentEdition(uint16(id))
-    doesNotExceedMaxSupply(uint16(id), uint32(amount))
+    hasBeenInitialized(uint256(id))
+    isCurrentEdition(uint256(id))
+    doesNotExceedMaxSupply(uint256(id), uint256(amount))
   {
     _mint(account, id, amount, '');
-    totalySupply[uint16(id)] += uint32(amount);
+    currentSupply[uint256(id)] += uint256(amount);
     // if tokenIdsMinted does not contain this token id, add it
-    if (totalySupply[uint16(id)] == amount) {
-      _tokenIdsMinted.push(uint16(id));
+    if (currentSupply[uint256(id)] == amount) {
+      _tokenIdsMinted.push(uint256(id));
     }
   }
 

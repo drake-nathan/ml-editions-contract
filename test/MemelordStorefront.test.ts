@@ -13,7 +13,11 @@ import {
   deployMldContract,
 } from '../scripts/deployers';
 import type { TokenArgs, StoreFrontArgs, MldArgs } from '../scripts/args';
-import { delegateAddress } from '../utils/constants';
+import { delegateAddress, zeroAddress } from '../utils/constants';
+import {
+  anyValue,
+  anyUint,
+} from '@nomicfoundation/hardhat-chai-matchers/withArgs';
 
 describe('MemelordStorefront contract', () => {
   let tokenContract: RektMemelordsEditions;
@@ -34,6 +38,31 @@ describe('MemelordStorefront contract', () => {
   let saintWallet: SignerWithAddress;
   let normie1: SignerWithAddress;
   let normie2: SignerWithAddress;
+  let mldOwner1: SignerWithAddress;
+  let mldOwner2: SignerWithAddress;
+
+  const setupMld = async () => {
+    const totalSupply = 50;
+    const tokensMintedOnDeploy = 15;
+    const owner1Tokens = 3;
+    const owner1TokenIds = [15, 16, 17];
+    const owner2Tokens = 5;
+    const owner2TokenIds = [18, 19, 20, 21, 22];
+    const remainingTokens =
+      totalSupply - tokensMintedOnDeploy - owner1Tokens - owner2Tokens;
+
+    await mldContract
+      .connect(deployer)
+      .ownerMint(mldOwner1.address, owner1Tokens);
+    await mldContract
+      .connect(deployer)
+      .ownerMint(mldOwner2.address, owner2Tokens);
+    await mldContract
+      .connect(deployer)
+      .ownerMint(deployer.address, remainingTokens);
+
+    return [owner1TokenIds, owner2TokenIds];
+  };
 
   before(async () => {
     [
@@ -44,6 +73,8 @@ describe('MemelordStorefront contract', () => {
       saintWallet,
       normie1,
       normie2,
+      mldOwner1,
+      mldOwner2,
     ] = await ethers.getSigners();
 
     tokenArgs = {
@@ -148,7 +179,44 @@ describe('MemelordStorefront contract', () => {
     });
   });
 
-  describe('Setup Mint', () => {
+  describe('Token Contract Address', () => {
+    it('should initialize with token address', async () => {
+      expect(await storefrontContract.tokenAddress()).to.equal(
+        tokenContract.address,
+      );
+    });
+
+    it('should be able to update token address', async () => {
+      await storefrontContract
+        .connect(devWallet)
+        .setTokenAddress(devWallet.address);
+
+      expect(await storefrontContract.tokenAddress()).to.equal(
+        devWallet.address,
+      );
+    });
+  });
+
+  describe('MLD Test Setup', () => {
+    it('should deploy MLD', async () => {
+      expect(mldContract.address).to.be.a.properAddress;
+    });
+
+    it('should mint mld tokens to test wallets', async () => {
+      await setupMld();
+
+      expect(await mldContract.balanceOf(mldOwner1.address)).to.equal(3);
+      expect(await mldContract.balanceOf(mldOwner2.address)).to.equal(5);
+    });
+
+    it('should have a supply of 50', async () => {
+      await setupMld();
+
+      expect(await mldContract.totalSupply()).to.equal(50);
+    });
+  });
+
+  describe('Mint', () => {
     const tokenId = 1;
     const maxSupply = 284;
     const startTime = Math.floor(Date.now() / 1000);
@@ -169,6 +237,218 @@ describe('MemelordStorefront contract', () => {
       expect(await tokenContract.currentEdition()).to.equal(tokenId);
     });
 
+    describe('Claiming', () => {
+      let owner1TokenIds: number[];
+      let owner2TokenIds: number[];
+
+      beforeEach(async () => {
+        [owner1TokenIds, owner2TokenIds] = await setupMld();
+        await setupMint();
+      });
+
+      it('mld owner can claim equivalent tokens', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount = mintPrice.mul(owner1TokenIds.length);
+
+        await storefrontContract
+          .connect(mldOwner1)
+          .claim(mldOwner1.address, owner1TokenIds, zeroAddress, {
+            value: weiAmount,
+          });
+
+        expect(
+          await tokenContract.balanceOf(mldOwner1.address, tokenId),
+        ).to.equal(owner1TokenIds.length);
+      });
+
+      it('mld owner cannot claim again with the same token', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount = mintPrice.mul(owner1TokenIds.length);
+
+        await storefrontContract
+          .connect(mldOwner1)
+          .claim(mldOwner1.address, owner1TokenIds, zeroAddress, {
+            value: weiAmount,
+          });
+
+        expect(
+          await tokenContract.balanceOf(mldOwner1.address, tokenId),
+        ).to.equal(owner1TokenIds.length);
+
+        expect(
+          storefrontContract
+            .connect(mldOwner1)
+            .claim(mldOwner1.address, owner1TokenIds, zeroAddress, {
+              value: weiAmount,
+            }),
+        )
+          .to.be.revertedWithCustomError(storefrontContract, 'TokenClaimed')
+          .withArgs(owner1TokenIds[0]);
+      });
+
+      it('mld owner can claim in multiple transactions', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount1 = mintPrice.mul(3);
+        const weiAmount2 = mintPrice.mul(2);
+
+        await storefrontContract
+          .connect(mldOwner2)
+          .claim(mldOwner2.address, [18, 19, 20], zeroAddress, {
+            value: weiAmount1,
+          });
+
+        expect(
+          await tokenContract.balanceOf(mldOwner2.address, tokenId),
+        ).to.equal(3);
+
+        await storefrontContract
+          .connect(mldOwner2)
+          .claim(mldOwner2.address, [21, 22], zeroAddress, {
+            value: weiAmount2,
+          });
+
+        expect(
+          await tokenContract.balanceOf(mldOwner2.address, tokenId),
+        ).to.equal(5);
+      });
+
+      it('all tokens are marked claimed after mint', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount1 = mintPrice.mul(3);
+        const weiAmount2 = mintPrice.mul(5);
+
+        const tokenIds = owner1TokenIds.concat(owner2TokenIds);
+
+        await storefrontContract
+          .connect(mldOwner1)
+          .claim(mldOwner1.address, tokenIds.slice(0, 3), zeroAddress, {
+            value: weiAmount1,
+          });
+        expect(
+          await tokenContract.balanceOf(mldOwner1.address, tokenId),
+        ).to.equal(3);
+
+        await storefrontContract
+          .connect(mldOwner2)
+          .claim(mldOwner2.address, tokenIds.slice(-5), zeroAddress, {
+            value: weiAmount2,
+          });
+        expect(
+          await tokenContract.balanceOf(mldOwner2.address, tokenId),
+        ).to.equal(5);
+
+        await Promise.all(
+          tokenIds.map(async (id) =>
+            expect(await storefrontContract.claimed(id)).to.equal(true),
+          ),
+        );
+      });
+
+      it('no one else can claim using mld tokens', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount = mintPrice.mul(2);
+
+        await expect(
+          storefrontContract
+            .connect(normie1)
+            .claim(normie1.address, [15, 16], zeroAddress, {
+              value: weiAmount,
+            }),
+        )
+          .to.be.revertedWithCustomError(
+            storefrontContract,
+            'NotOwnerOfMldToken',
+          )
+          .withArgs(normie1.address, 15);
+      });
+    });
+
+    describe('Payment Splitter', () => {
+      let owner1TokenIds: number[];
+      let owner2TokenIds: number[];
+
+      beforeEach(async () => {
+        [owner1TokenIds, owner2TokenIds] = await setupMld();
+        await setupMint();
+
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount1 = mintPrice.mul(3);
+        const weiAmount2 = mintPrice.mul(5);
+
+        const tokenIds = owner1TokenIds.concat(owner2TokenIds);
+
+        await storefrontContract
+          .connect(mldOwner1)
+          .claim(mldOwner1.address, tokenIds.slice(0, 3), zeroAddress, {
+            value: weiAmount1,
+          });
+
+        await storefrontContract
+          .connect(mldOwner2)
+          .claim(mldOwner2.address, tokenIds.slice(-5), zeroAddress, {
+            value: weiAmount2,
+          });
+      });
+
+      it('should have the correct contract balance', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount = mintPrice.mul(8);
+        const balance = await ethers.provider.getBalance(
+          storefrontContract.address,
+        );
+
+        expect(balance).to.equal(weiAmount);
+      });
+
+      it('should be able to release funds to the safe', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+        const totalWei = mintPrice.mul(8);
+        const bigShareWei = totalWei.mul(90).div(100);
+
+        const balanceBeforeWei = await ethers.provider.getBalance(
+          royaltySafe.address,
+        );
+
+        await storefrontContract
+          .connect(hmooreWallet)
+          ['release(address)'](royaltySafe.address);
+
+        const balanceAfter = await ethers.provider.getBalance(
+          royaltySafe.address,
+        );
+
+        const diffInWei = balanceAfter.sub(balanceBeforeWei);
+
+        expect(diffInWei).to.equal(bigShareWei);
+      });
+
+      it('should be able to release funds to the dev', async () => {
+        const mintPrice = await storefrontContract.mintPrice();
+
+        const balanceBeforeWei = await ethers.provider.getBalance(
+          devWallet.address,
+        );
+
+        await storefrontContract
+          .connect(devWallet)
+          ['release(address)'](devWallet.address);
+
+        const balanceAfter = await ethers.provider.getBalance(
+          devWallet.address,
+        );
+
+        expect(balanceAfter).to.be.gt(balanceBeforeWei);
+      });
+
+      it('cannot release funds to an unapproved address', async () => {
+        await expect(
+          storefrontContract
+            .connect(normie2)
+            ['release(address)'](normie1.address),
+        ).to.be.revertedWith('PaymentSplitter: account has no shares');
+      });
+    });
+
     describe('Open/Close Mint with Timestamps', () => {
       it('should automatically open the mint phase based on unix time', async () => {
         await setupMint();
@@ -181,10 +461,112 @@ describe('MemelordStorefront contract', () => {
       it('should automatically close the mint phase based on unix time', async () => {
         await setupMint();
 
-        await time.increase(10001);
+        await time.increase(endTime - startTime + 1000);
 
         expect(await storefrontContract.isMintOpen()).to.equal(false);
       });
+    });
+  });
+
+  describe('Setters', () => {
+    describe('Mint Price', () => {
+      it('admin can manually set mint price', async () => {
+        const mintPrice = ethers.utils.parseEther('0.069');
+        await storefrontContract.connect(devWallet).setMintPrice(mintPrice);
+        expect(await storefrontContract.mintPrice()).to.equal(mintPrice);
+      });
+
+      it('non-admin cannot manually set mint price', async () => {
+        const mintPrice = ethers.utils.parseEther('0.069');
+        await expect(
+          storefrontContract.connect(normie1).setMintPrice(mintPrice),
+        ).to.be.revertedWith(
+          `AccessControl: account ${normie1.address.toLowerCase()} is missing role ${await storefrontContract.ADMIN_ROLE()}`,
+        );
+      });
+    });
+
+    describe('Current Edition', () => {
+      it('admin can manually set current edition', async () => {
+        await storefrontContract.connect(devWallet).setCurrentEditionId(69);
+        expect(await storefrontContract.currentEdition()).to.equal(69);
+      });
+
+      it('non-admin cannot manually set current edition', async () => {
+        await expect(
+          storefrontContract.connect(normie1).setCurrentEditionId(69),
+        ).to.be.revertedWith(
+          `AccessControl: account ${normie1.address.toLowerCase()} is missing role ${await storefrontContract.ADMIN_ROLE()}`,
+        );
+      });
+    });
+
+    describe('Mint Per MLD', () => {
+      it('admin can manually set mint per mld', async () => {
+        await storefrontContract.connect(devWallet).setMintPerMld(69);
+        expect(await storefrontContract.mintPerMld()).to.equal(69);
+      });
+
+      it('non-admin cannot manually set mint per mld', async () => {
+        await expect(
+          storefrontContract.connect(normie1).setMintPerMld(69),
+        ).to.be.revertedWith(
+          `AccessControl: account ${normie1.address.toLowerCase()} is missing role ${await storefrontContract.ADMIN_ROLE()}`,
+        );
+      });
+    });
+  });
+
+  describe('Claimed', () => {
+    const tokenId = 5;
+    const tokenIds = [5, 7, 13, 42, 49];
+
+    it('admin should be able to manually set a token as claimed', async () => {
+      await storefrontContract.connect(devWallet).setClaimed(tokenId);
+
+      expect(await storefrontContract.claimed(tokenId)).to.equal(true);
+      expect(await storefrontContract.claimed(tokenId + 69)).to.equal(false);
+    });
+
+    it('non-admin should not be able to manually set a token as claimed', async () => {
+      await expect(
+        storefrontContract.connect(normie1).setClaimed(tokenId),
+      ).to.be.revertedWith(
+        `AccessControl: account ${normie1.address.toLowerCase()} is missing role ${await storefrontContract.ADMIN_ROLE()}`,
+      );
+    });
+
+    it('admin can manually reset claim', async () => {
+      await storefrontContract.connect(devWallet).setClaimed(tokenId);
+      await storefrontContract.connect(devWallet).resetClaimed(tokenId);
+
+      expect(await storefrontContract.claimed(tokenId)).to.equal(false);
+    });
+
+    it('admin can manually reset full claim list', async () => {
+      await setupMld();
+
+      await Promise.all(
+        tokenIds.map(async (id) => {
+          await storefrontContract.connect(devWallet).setClaimed(id);
+        }),
+      );
+
+      await Promise.all(
+        tokenIds.map(async (id) => {
+          expect(await storefrontContract.claimed(id)).to.equal(true);
+        }),
+      );
+
+      expect(await storefrontContract.claimed(1)).to.equal(false);
+
+      await storefrontContract.connect(devWallet).resetClaimedList();
+
+      await Promise.all(
+        tokenIds.map(async (id) => {
+          expect(await storefrontContract.claimed(id)).to.equal(false);
+        }),
+      );
     });
   });
 });

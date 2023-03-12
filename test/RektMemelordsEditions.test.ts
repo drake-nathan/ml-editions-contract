@@ -5,7 +5,7 @@ import type { RektMemelordsEditions } from '../typechain-types';
 import type { Context } from 'mocha';
 import type { ContractTransaction } from 'ethers';
 import { type TokenArgs } from '../scripts/args';
-import { shouldSupportInterfaces } from './support/interface';
+import { shouldSupportInterfaces } from './helpers/interface';
 import { deployTokenContract } from '../scripts/deployers';
 
 describe('RektMemelordsEditions contract', () => {
@@ -326,20 +326,20 @@ describe('RektMemelordsEditions contract', () => {
       });
     });
 
-    describe('totalSupply', () => {
-      it('totalSupply is tracked by token and can be read', async () => {
+    describe('currentSupply', () => {
+      it('currentSupply is tracked by token and can be read', async () => {
         await initializeEdition(devWallet, 0, 100, 'thisIsATokenURI');
         await mintTokens(0, 10, hmooreWallet, saintWallet);
-        expect(await tokenContract.totalSupply(0)).to.equal(10);
+        expect(await tokenContract.currentSupply(0)).to.equal(10);
 
         await mintTokens(0, 10, hmooreWallet, saintWallet);
-        expect(await tokenContract.totalSupply(0)).to.equal(20);
+        expect(await tokenContract.currentSupply(0)).to.equal(20);
 
         await initializeEdition(devWallet, 1, 100, 'thisIsATokenURI');
         await mintTokens(1, 69, hmooreWallet, saintWallet);
-        expect(await tokenContract.totalSupply(1)).to.equal(69);
+        expect(await tokenContract.currentSupply(1)).to.equal(69);
 
-        expect(await tokenContract.totalSupply(2)).to.equal(0);
+        expect(await tokenContract.currentSupply(2)).to.equal(0);
       });
     });
 
