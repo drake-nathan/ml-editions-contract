@@ -11,6 +11,8 @@ import './IDelegationRegistry.sol';
 interface IMldContract {
   function ownerOf(uint256 tokenId) external view returns (address owner);
 
+  function burn(uint256 tokenId) external;
+
   function totalSupply() external view returns (uint256 totalSupply);
 }
 
@@ -216,7 +218,7 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     uint256[] calldata mldClaimTokenIds,
     address _vault
   )
-    public
+    external
     payable
     whenNotPaused
     whenMintOpen
@@ -258,6 +260,46 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
 
     for (uint256 i = 0; i < numberOfClaims; i++) {
       uint256 tokenId = mldClaimTokenIds[i];
+      claimed[tokenId] = true;
+    }
+  }
+
+  /**
+   *
+   * @param mldBurnTokenIds - array of MLD token ids using to claim, must be 1:1 with numberOfTokens, and must be owner or delegate of those tokens
+   */
+  function burnAndClaim(
+    uint256[] calldata mldBurnTokenIds
+  )
+    external
+    whenNotPaused
+    whenMintOpen
+    whenTotalSupplyNotReached(_mintCount(mldBurnTokenIds))
+  {
+    uint256 numberOfBurns = mldBurnTokenIds.length;
+    uint256 numberOfTokens = _mintCount(mldBurnTokenIds);
+
+    for (uint256 i = 0; i < numberOfBurns; i++) {
+      uint256 tokenId = mldBurnTokenIds[i];
+
+      if (claimed[tokenId]) {
+        revert TokenClaimed({tokenId: tokenId});
+      }
+
+      if (mld.ownerOf(tokenId) != msg.sender) {
+        revert NotOwnerOfMldToken({requester: msg.sender, tokenId: tokenId});
+      }
+    }
+
+    for (uint256 i = 0; i < numberOfBurns; i++) {
+      uint256 tokenId = mldBurnTokenIds[i];
+      mld.burn(tokenId);
+    }
+
+    token.mint(msg.sender, currentEdition, numberOfTokens);
+
+    for (uint256 i = 0; i < numberOfBurns; i++) {
+      uint256 tokenId = mldBurnTokenIds[i];
       claimed[tokenId] = true;
     }
   }

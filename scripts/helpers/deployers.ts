@@ -6,8 +6,8 @@ import type {
   MemelordStorefront,
   MemeLordDistrict__factory,
   MemeLordDistrict,
-} from '../typechain-types';
-import type { MldArgs, StoreFrontArgs, TokenArgs } from './args';
+} from '../../typechain-types';
+import type { MldArgs, TokenArgs, StoreFrontArgs } from './args/types';
 
 export const deployTokenContract = async (
   args: TokenArgs,
@@ -30,6 +30,8 @@ export const deployStoreFrontContract = async (
   const StoreFrontFactory = (await ethers.getContractFactory(
     'MemelordStorefront',
   )) as MemelordStorefront__factory;
+
+  if (!args.tokenAddress) throw new Error('Missing token address on args.');
 
   const storeFrontContract: MemelordStorefront =
     (await StoreFrontFactory.deploy(

@@ -4,9 +4,9 @@ import type { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import type { RektMemelordsEditions } from '../typechain-types';
 import type { Context } from 'mocha';
 import type { ContractTransaction } from 'ethers';
-import { type TokenArgs } from '../scripts/args';
+import { type TokenArgs } from '../scripts/helpers/args/types';
 import { shouldSupportInterfaces } from './helpers/interface';
-import { deployTokenContract } from '../scripts/deployers';
+import { deployTokenContract } from '../scripts/helpers/deployers';
 
 describe('RektMemelordsEditions contract', () => {
   let tokenContract: RektMemelordsEditions;

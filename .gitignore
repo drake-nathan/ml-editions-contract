@@ -4,9 +4,7 @@ coverage
 coverage.json
 typechain
 typechain-types
-proofs
-arguments.js
-allowlistFinal.js
+outputs
 
 # Hardhat files
 cache

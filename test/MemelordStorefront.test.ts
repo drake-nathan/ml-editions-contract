@@ -11,13 +11,13 @@ import {
   deployTokenContract,
   deployStoreFrontContract,
   deployMldContract,
-} from '../scripts/deployers';
-import type { TokenArgs, StoreFrontArgs, MldArgs } from '../scripts/args';
+} from '../scripts/helpers/deployers';
+import type {
+  TokenArgs,
+  StoreFrontArgs,
+  MldArgs,
+} from '../scripts/helpers/args/types';
 import { delegateAddress, zeroAddress } from '../utils/constants';
-import {
-  anyValue,
-  anyUint,
-} from '@nomicfoundation/hardhat-chai-matchers/withArgs';
 
 describe('MemelordStorefront contract', () => {
   let tokenContract: RektMemelordsEditions;
@@ -360,6 +360,37 @@ describe('MemelordStorefront contract', () => {
             'NotOwnerOfMldToken',
           )
           .withArgs(normie1.address, 15);
+      });
+    });
+
+    describe('Burning', () => {
+      beforeEach(async () => {
+        await setupMld();
+        await setupMint();
+      });
+
+      it('should be able to burn mld to mint edition', async () => {
+        await mldContract
+          .connect(mldOwner1)
+          .approve(storefrontContract.address, 15);
+
+        await storefrontContract.connect(mldOwner1).burnAndClaim([15]);
+
+        expect(
+          await tokenContract.balanceOf(mldOwner1.address, tokenId),
+        ).to.equal(1);
+      });
+
+      it('should be able to burn mld to mint multiple editions', async () => {
+        await mldContract
+          .connect(mldOwner2)
+          .setApprovalForAll(storefrontContract.address, true);
+
+        await storefrontContract.connect(mldOwner2).burnAndClaim([18, 19, 20]);
+
+        expect(
+          await tokenContract.balanceOf(mldOwner2.address, tokenId),
+        ).to.equal(3);
       });
     });
 

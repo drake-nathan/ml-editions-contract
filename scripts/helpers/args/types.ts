@@ -1,3 +1,5 @@
+export type Chain = 'mainnet' | 'goerli';
+
 export interface TokenArgs {
   royaltySafe: string;
   devWallet: string;
@@ -8,7 +10,7 @@ export interface TokenArgs {
 export interface StoreFrontArgs {
   delegateAddress: string;
   mldAddress: string;
-  tokenAddress: string;
+  tokenAddress?: string;
   payees: string[];
   paymentShares: number[];
   devWallet: string;
