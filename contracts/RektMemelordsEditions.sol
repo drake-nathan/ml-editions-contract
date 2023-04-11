@@ -5,6 +5,7 @@ pragma solidity ^0.8.17;
 
 import '@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155BurnableUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol';
@@ -19,6 +20,7 @@ error ExceedsMaxSupply(uint256 id, uint256 requested, uint256 maxSupply);
 contract RektMemelordsEditions is
   Initializable,
   ERC1155Upgradeable,
+  OwnableUpgradeable,
   AccessControlUpgradeable,
   PausableUpgradeable,
   ERC1155BurnableUpgradeable,
@@ -59,6 +61,7 @@ contract RektMemelordsEditions is
     address saintWallet
   ) public initializer {
     __ERC1155_init('');
+    __Ownable_init();
     __AccessControl_init();
     __Pausable_init();
     __ERC1155Burnable_init();
@@ -66,7 +69,10 @@ contract RektMemelordsEditions is
     __ERC2981_init();
     __DefaultOperatorFilterer_init();
 
+    _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
     _grantRole(DEFAULT_ADMIN_ROLE, hmooreWallet);
+
+    _grantRole(ADMIN_ROLE, msg.sender);
     _grantRole(ADMIN_ROLE, devWallet);
     _grantRole(ADMIN_ROLE, hmooreWallet);
     _grantRole(ADMIN_ROLE, saintWallet);

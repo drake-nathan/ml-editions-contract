@@ -10,13 +10,17 @@ import type {
 import { storeFrontArgs, tokenArgs } from './helpers/args';
 import type { StoreFrontArgs, TokenArgs, Chain } from './helpers/args/types';
 import { writeArgs, writeContractInfo } from './helpers/fileWrites';
+import { ethers } from 'ethers';
 
 configDotenv();
 
 const chainEnv = process.env.CHAIN;
+const testnetPrivateKey = process.env.TESTNET_PRIVATE_KEY;
+const mainnetPrivateKey = process.env.MAINNET_PRIVATE_KEY;
+const infuraKey = process.env.INFURA_KEY;
 
-if (!chainEnv) {
-  throw new Error('Missing CHAIN env var.');
+if (!chainEnv || !testnetPrivateKey || !mainnetPrivateKey || !infuraKey) {
+  throw new Error('Missing env var.');
 }
 
 if (chainEnv !== 'mainnet' && chainEnv !== 'goerli') {
@@ -60,6 +64,56 @@ const deploy = async (chain: Chain) => {
   writeArgs('token', tokenArgs_);
   console.info(`Writing storefront args...`);
   writeArgs('storefront', storeFrontArgs_);
+
+  try {
+    const privateKey =
+      chain === 'mainnet' ? mainnetPrivateKey : testnetPrivateKey;
+    const provider = new ethers.providers.InfuraProvider(chain, infuraKey);
+    const wallet = new ethers.Wallet(privateKey, provider);
+    const tokenWithSigner = tokenContract.connect(wallet);
+
+    const defaultAdminRole = tokenWithSigner.DEFAULT_ADMIN_ROLE();
+    const adminRole = tokenWithSigner.ADMIN_ROLE();
+    const minterRole = tokenWithSigner.MINTER_ROLE();
+
+    console.info('Assigning adming role to storefront...');
+    const tx1 = await tokenWithSigner.grantRole(
+      adminRole,
+      storeFrontContract.address,
+    );
+    await tx1.wait();
+
+    console.info('Assigning minter role to storefront...');
+    const tx2 = await tokenWithSigner.grantRole(
+      minterRole,
+      storeFrontContract.address,
+    );
+    await tx2.wait();
+
+    console.info('Transferring ownership to hmoorewallet...');
+    const tx3 = await tokenWithSigner.transferOwnership(
+      tokenArgs_.hmooreWallet,
+    );
+    await tx3.wait();
+
+    console.info('Revoking admin role from deployer...');
+    const tx4 = await tokenWithSigner.revokeRole(adminRole, wallet.address);
+    await tx4.wait();
+
+    console.info('Revoking default admin role from deployer...');
+    const tx5 = await tokenWithSigner.revokeRole(
+      defaultAdminRole,
+      wallet.address,
+    );
+    await tx5.wait();
+
+    console.info('Successfully assigned roles!');
+  } catch (error) {
+    console.error('Error assigning roles', error);
+    process.exit(1);
+  }
+
+  console.info('Done!');
 };
 
 deploy(chainEnv)

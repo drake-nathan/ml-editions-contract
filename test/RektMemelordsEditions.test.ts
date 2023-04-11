@@ -71,11 +71,11 @@ describe('RektMemelordsEditions contract', () => {
 
   describe('Access Control', () => {
     describe('On Contract Deploy', () => {
-      it('assigns default admin role to hmooreWallet', async () => {
+      it('assigns default admin role to deployer', async () => {
         expect(
           await tokenContract.hasRole(
             await tokenContract.DEFAULT_ADMIN_ROLE(),
-            hmooreWallet.address,
+            deployer.address,
           ),
         ).to.equal(true);
       });
@@ -124,27 +124,6 @@ describe('RektMemelordsEditions contract', () => {
           ),
         ).to.equal(false);
       });
-
-      it('does not assign any roles to deployer', async () => {
-        expect(
-          await tokenContract.hasRole(
-            await tokenContract.DEFAULT_ADMIN_ROLE(),
-            deployer.address,
-          ),
-        ).to.equal(false);
-        expect(
-          await tokenContract.hasRole(
-            await tokenContract.ADMIN_ROLE(),
-            deployer.address,
-          ),
-        ).to.equal(false);
-        expect(
-          await tokenContract.hasRole(
-            await tokenContract.MINTER_ROLE(),
-            deployer.address,
-          ),
-        ).to.equal(false);
-      });
     });
 
     describe('After Deploy', () => {
@@ -184,7 +163,7 @@ describe('RektMemelordsEditions contract', () => {
 
       it('default admin can grant admin role to non-admin', async () => {
         await tokenContract
-          .connect(hmooreWallet)
+          .connect(deployer)
           .grantRole(await tokenContract.ADMIN_ROLE(), nonOwner1.address);
 
         expect(
@@ -197,7 +176,7 @@ describe('RektMemelordsEditions contract', () => {
 
       it('default admin can revoke admin role from admin', async () => {
         await tokenContract
-          .connect(hmooreWallet)
+          .connect(deployer)
           .revokeRole(await tokenContract.ADMIN_ROLE(), devWallet.address);
 
         expect(
@@ -233,6 +212,51 @@ describe('RektMemelordsEditions contract', () => {
           ),
         ).to.equal(true);
       });
+
+      it('default admin can grant default admin', async () => {
+        await tokenContract
+          .connect(deployer)
+          .grantRole(
+            await tokenContract.DEFAULT_ADMIN_ROLE(),
+            hmooreWallet.address,
+          );
+
+        expect(
+          await tokenContract.hasRole(
+            await tokenContract.DEFAULT_ADMIN_ROLE(),
+            hmooreWallet.address,
+          ),
+        ).to.equal(true);
+      });
+
+      it('default admin can revoke default admin from self', async () => {
+        await tokenContract
+          .connect(deployer)
+          .revokeRole(
+            await tokenContract.DEFAULT_ADMIN_ROLE(),
+            deployer.address,
+          );
+
+        expect(
+          await tokenContract.hasRole(
+            await tokenContract.DEFAULT_ADMIN_ROLE(),
+            deployer.address,
+          ),
+        ).to.equal(false);
+      });
+    });
+  });
+
+  describe('Ownable', () => {
+    it('deployer is owner on deploy', async () => {
+      expect(await tokenContract.owner()).to.equal(deployer.address);
+    });
+
+    it('owner can transfer ownership', async () => {
+      await tokenContract
+        .connect(deployer)
+        .transferOwnership(hmooreWallet.address);
+      expect(await tokenContract.owner()).to.equal(hmooreWallet.address);
     });
   });
 
@@ -245,7 +269,7 @@ describe('RektMemelordsEditions contract', () => {
 
     it('allows default admin to update the address and percentage', async () => {
       await tokenContract
-        .connect(hmooreWallet)
+        .connect(deployer)
         .setRoyaltyInfo(saintWallet.address, 690);
 
       const info = await tokenContract.royaltyInfo(0, 1000);

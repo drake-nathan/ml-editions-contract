@@ -35,6 +35,7 @@ const config: HardhatUserConfig = {
     mainnet: {
       url: mainnetRpcUrl,
       accounts: [mainnetPrivateKey],
+      timeout: 600000,
     },
     goerli: {
       url: goerliRpcUrl,

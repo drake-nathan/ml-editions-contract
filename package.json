@@ -9,6 +9,8 @@
     "compile": "yarn hardhat compile",
     "deploy:mainnet": "yarn compile && CHAIN=mainnet yarn hardhat run scripts/deploy.ts --network mainnet",
     "deploy:testnet": "yarn compile && CHAIN=goerli yarn hardhat run scripts/deploy.ts --network goerli",
+    "deploy:store:testnet": "yarn compile && CHAIN=goerli yarn hardhat run scripts/deployStorefront.ts --network goerli",
+    "deploy:store:mainnet": "yarn compile && CHAIN=mainnet yarn hardhat run scripts/deployStorefront.ts --network mainnet",
     "verify:testnet:token": "yarn hardhat verify --constructor-args outputs/tokenArgs.js --network goerli",
     "verify:testnet:store": "yarn hardhat verify --constructor-args outputs/storefrontArgs.js --network goerli",
     "verify:mainnet:token": "yarn hardhat verify --constructor-args outputs/tokenArgs.js --network mainnet",

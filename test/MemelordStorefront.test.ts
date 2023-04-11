@@ -217,7 +217,8 @@ describe('MemelordStorefront contract', () => {
   });
 
   describe('Mint', () => {
-    const tokenId = 1;
+    const tokenId = 0;
+    const freeTokenId = 1;
     const maxSupply = 284;
     const startTime = Math.floor(Date.now() / 1000);
     const endTime = startTime + 10000;
@@ -226,7 +227,16 @@ describe('MemelordStorefront contract', () => {
     const setupMint = async () => {
       await storefrontContract
         .connect(devWallet)
-        .setupMint(tokenId, maxSupply, startTime, endTime, uri);
+        .setupMint(tokenId, maxSupply, startTime, endTime, uri, [0]);
+    };
+
+    const setupFreeClaim = async () => {
+      await storefrontContract
+        .connect(devWallet)
+        .setupMint(freeTokenId, maxSupply, startTime, endTime, uri, [0]);
+
+      await storefrontContract.connect(devWallet).setMintPrice(0);
+      await storefrontContract.connect(devWallet).resetClaimedList();
     };
 
     it('should be able to initialize mint on token contract', async () => {
@@ -235,6 +245,37 @@ describe('MemelordStorefront contract', () => {
       expect(await tokenContract.maxSupply(tokenId)).to.equal(maxSupply);
       expect(await storefrontContract.currentEdition()).to.equal(tokenId);
       expect(await tokenContract.currentEdition()).to.equal(tokenId);
+    });
+
+    describe('Free Claim', () => {
+      let owner1TokenIds: number[];
+      let owner2TokenIds: number[];
+
+      beforeEach(async () => {
+        [owner1TokenIds, owner2TokenIds] = await setupMld();
+        await setupMint();
+
+        const mintPrice = await storefrontContract.mintPrice();
+        const weiAmount = mintPrice.mul(owner1TokenIds.length);
+
+        await storefrontContract
+          .connect(mldOwner1)
+          .claim(mldOwner1.address, owner1TokenIds, zeroAddress, {
+            value: weiAmount,
+          });
+
+        await setupFreeClaim();
+      });
+
+      it('PML owner should be able to claim', async () => {
+        await storefrontContract
+          .connect(mldOwner1)
+          .freeClaim(mldOwner1.address, owner1TokenIds, zeroAddress);
+
+        expect(
+          await tokenContract.balanceOf(mldOwner1.address, freeTokenId),
+        ).to.equal(owner1TokenIds.length);
+      });
     });
 
     describe('Claiming', () => {

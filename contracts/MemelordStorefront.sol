@@ -28,6 +28,11 @@ interface ITokenContract {
   function currentSupply(uint256 id) external returns (uint256 supply);
 
   function maxSupply(uint256 id) external returns (uint256 supply);
+
+  function balanceOf(
+    address account,
+    uint256 id
+  ) external returns (uint256 balance);
 }
 
 error MaxTokensPerTransactionExceeded(uint256 requested, uint256 maximum);
@@ -35,8 +40,10 @@ error InsufficientPayment(uint256 sent, uint256 required);
 error TotalSupplyExceeded(uint256 id, uint256 requested, uint256 maxSupply);
 error DelegateNotValid(address delegate);
 error NotOwnerOfMldToken(address requester, uint256 tokenId);
+error NotOwnerOfEdition(address requester, uint256 id);
 error TokenClaimed(uint256 tokenId);
 error MintClosed();
+error MintNotFree();
 
 contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   // roles
@@ -49,6 +56,7 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   uint256 public currentEdition = 0;
   uint256 public mintStart = 1690000000;
   uint256 public mintEnd = 1690000001;
+  uint16[] public requiredOwnerOf = [0];
 
   // create mapping of token ids used to claim
   mapping(uint256 => bool) public claimed;
@@ -163,12 +171,14 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     uint256 maxSupply,
     uint256 startTime_,
     uint256 endTime_,
-    string calldata uri
+    string calldata uri,
+    uint16[] calldata requiredOwnerOf_
   ) external onlyRole(ADMIN_ROLE) {
     token.initializeEdition(id, maxSupply, uri);
     currentEdition = id;
     mintStart = startTime_;
     mintEnd = endTime_;
+    requiredOwnerOf = requiredOwnerOf_;
   }
 
   modifier whenSufficientValue(uint256 numberOfTokens) {
@@ -202,7 +212,7 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
   }
 
   function _mintCount(
-    uint256[] calldata mldClaimTokenIds
+    uint16[] calldata mldClaimTokenIds
   ) internal view returns (uint256) {
     return mintPerMld * mldClaimTokenIds.length;
   }
@@ -215,7 +225,7 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
    */
   function claim(
     address to,
-    uint256[] calldata mldClaimTokenIds,
+    uint16[] calldata mldClaimTokenIds,
     address _vault
   )
     external
@@ -269,7 +279,7 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
    * @param mldBurnTokenIds - array of MLD token ids using to claim, must be 1:1 with numberOfTokens, and must be owner or delegate of those tokens
    */
   function burnAndClaim(
-    uint256[] calldata mldBurnTokenIds
+    uint16[] calldata mldBurnTokenIds
   )
     external
     whenNotPaused
@@ -282,13 +292,9 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
     for (uint256 i = 0; i < numberOfBurns; i++) {
       uint256 tokenId = mldBurnTokenIds[i];
 
-      if (claimed[tokenId]) {
-        revert TokenClaimed({tokenId: tokenId});
-      }
+      require(!claimed[tokenId], 'Token already claimed');
 
-      if (mld.ownerOf(tokenId) != msg.sender) {
-        revert NotOwnerOfMldToken({requester: msg.sender, tokenId: tokenId});
-      }
+      require(mld.ownerOf(tokenId) == msg.sender, 'Not owner of MLD token');
     }
 
     for (uint256 i = 0; i < numberOfBurns; i++) {
@@ -300,6 +306,77 @@ contract MemelordStorefront is Pausable, AccessControl, PaymentSplitter {
 
     for (uint256 i = 0; i < numberOfBurns; i++) {
       uint256 tokenId = mldBurnTokenIds[i];
+      claimed[tokenId] = true;
+    }
+  }
+
+  modifier whenMintIsFree() {
+    if (mintPrice > 0) {
+      revert MintNotFree();
+    }
+    _;
+  }
+
+  /**
+   *
+   * @param to - address to send tokens to
+   * @param mldClaimTokenIds - array of MLD token ids using to claim, must be 1:1 with numberOfTokens, and must be owner or delegate of those tokens
+   * @param _vault - optional vault address for delegate.cash
+   */
+  function freeClaim(
+    address to,
+    uint16[] calldata mldClaimTokenIds,
+    address _vault
+  )
+    external
+    whenNotPaused
+    whenMintOpen
+    whenMintIsFree
+    whenTotalSupplyNotReached(_mintCount(mldClaimTokenIds))
+  {
+    address requester = msg.sender;
+
+    if (_vault != address(0)) {
+      bool isDelegateValid = dc.checkDelegateForContract(
+        requester,
+        _vault,
+        _mldAddress
+      );
+
+      if (!isDelegateValid) {
+        revert DelegateNotValid({delegate: requester});
+      }
+
+      requester = _vault;
+    }
+
+    // check if the requesters owns all required tokens
+    for (uint16 i = 0; i < requiredOwnerOf.length; i++) {
+      uint16 tokenId = requiredOwnerOf[i];
+      bool isOwnerOf = token.balanceOf(requester, tokenId) > 0;
+      if (!isOwnerOf)
+        revert NotOwnerOfEdition({requester: requester, id: tokenId});
+    }
+
+    uint256 numberOfClaims = mldClaimTokenIds.length;
+    uint256 numberOfTokens = _mintCount(mldClaimTokenIds);
+
+    for (uint256 i = 0; i < numberOfClaims; i++) {
+      uint256 tokenId = mldClaimTokenIds[i];
+
+      if (claimed[tokenId]) {
+        revert TokenClaimed({tokenId: tokenId});
+      }
+
+      if (mld.ownerOf(tokenId) != requester) {
+        revert NotOwnerOfMldToken({requester: requester, tokenId: tokenId});
+      }
+    }
+
+    token.mint(to, currentEdition, numberOfTokens);
+
+    for (uint256 i = 0; i < numberOfClaims; i++) {
+      uint256 tokenId = mldClaimTokenIds[i];
       claimed[tokenId] = true;
     }
   }
