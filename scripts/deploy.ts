@@ -23,8 +23,8 @@ if (!chainEnv || !testnetPrivateKey || !mainnetPrivateKey || !infuraKey) {
   throw new Error('Missing env var.');
 }
 
-if (chainEnv !== 'mainnet' && chainEnv !== 'goerli') {
-  throw new Error("CHAIN env var must be 'mainnet' or 'goerli'.");
+if (chainEnv !== 'mainnet' && chainEnv !== 'goerli' && chainEnv !== 'sepolia') {
+  throw new Error("CHAIN env var must be 'mainnet' or 'goerli' or 'sepolia'.");
 }
 
 const deploy = async (chain: Chain) => {

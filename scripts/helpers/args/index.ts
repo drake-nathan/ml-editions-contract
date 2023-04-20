@@ -13,7 +13,8 @@ const hmooreWalletMainnet = '0x15d41E0Fa9419b11916507BEd3E201FE82266C74';
 const hmooreWalletTestnet = '0x7A70e760310b7257Ad58f8bF9084C9f7D32Cf76C';
 
 const mldAddressMainnet = '0x924F2a4D3e93cC595792292C84A41Ad3AEd70E95';
-const mldAddressTestnet = '0xe0c8D341bF2024F8f331aE1c78E66aE823D85f01';
+const mldAddressGoerli = '0xe0c8D341bF2024F8f331aE1c78E66aE823D85f01';
+const mldAddressSepolia = '0xDbbF7151C0377FEDbc7cb93fDE3b46cde32f67e4';
 
 const delegateAddress = '0x00000000000076A84feF008CDAbe6409d2FE638B';
 
@@ -25,6 +26,12 @@ export const tokenArgs: Record<Chain, TokenArgs> = {
     saintWallet: saintWalletMainnet,
   },
   goerli: {
+    royaltySafe: gnosisSafeTestnet,
+    devWallet: nateWalletTestnet,
+    hmooreWallet: hmooreWalletTestnet,
+    saintWallet: saintWalletTestnet,
+  },
+  sepolia: {
     royaltySafe: gnosisSafeTestnet,
     devWallet: nateWalletTestnet,
     hmooreWallet: hmooreWalletTestnet,
@@ -45,7 +52,17 @@ export const storeFrontArgs: Record<Chain, StoreFrontArgs> = {
   },
   goerli: {
     delegateAddress,
-    mldAddress: mldAddressTestnet,
+    mldAddress: mldAddressGoerli,
+    tokenAddress: '',
+    payees: [nateWalletTestnet, gnosisSafeTestnet],
+    paymentShares: [1, 9],
+    devWallet: nateWalletTestnet,
+    hmooreWallet: hmooreWalletTestnet,
+    saintWallet: saintWalletTestnet,
+  },
+  sepolia: {
+    delegateAddress,
+    mldAddress: mldAddressSepolia,
     tokenAddress: '',
     payees: [nateWalletTestnet, gnosisSafeTestnet],
     paymentShares: [1, 9],

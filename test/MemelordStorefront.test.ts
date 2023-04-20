@@ -227,13 +227,13 @@ describe('MemelordStorefront contract', () => {
     const setupMint = async () => {
       await storefrontContract
         .connect(devWallet)
-        .setupMint(tokenId, maxSupply, startTime, endTime, uri, [0]);
+        .setupMint(tokenId, maxSupply, startTime, endTime, uri, []);
     };
 
     const setupFreeClaim = async () => {
       await storefrontContract
         .connect(devWallet)
-        .setupMint(freeTokenId, maxSupply, startTime, endTime, uri, [0]);
+        .setupMint(freeTokenId, maxSupply, startTime, endTime, uri, []);
 
       await storefrontContract.connect(devWallet).setMintPrice(0);
       await storefrontContract.connect(devWallet).resetClaimedList();

@@ -1,4 +1,4 @@
-export type Chain = 'mainnet' | 'goerli';
+export type Chain = 'mainnet' | 'goerli' | 'sepolia';
 
 export interface TokenArgs {
   royaltySafe: string;

@@ -8,16 +8,14 @@ import { config as configDotenv } from 'dotenv';
 import type { HardhatUserConfig } from 'hardhat/config';
 
 configDotenv();
-const mainnetRpcUrl = process.env.MAINNET_RPC_URL;
-const goerliRpcUrl = process.env.GOERLI_RPC_URL;
+const infuraKey = process.env.INFURA_KEY;
 const etherscanApiKey = process.env.ETHERSCAN_API_KEY;
 const coinmarketcapApiKey = process.env.COINMARKETCAP_API_KEY;
 const testnetPrivateKey = process.env.TESTNET_PRIVATE_KEY;
 const mainnetPrivateKey = process.env.MAINNET_PRIVATE_KEY;
 
 if (
-  !mainnetRpcUrl ||
-  !goerliRpcUrl ||
+  !infuraKey ||
   !etherscanApiKey ||
   !coinmarketcapApiKey ||
   !testnetPrivateKey ||
@@ -33,13 +31,19 @@ const config: HardhatUserConfig = {
   },
   networks: {
     mainnet: {
-      url: mainnetRpcUrl,
+      url: `https://mainnet.infura.io/v3/${infuraKey}`,
       accounts: [mainnetPrivateKey],
       timeout: 600000,
     },
     goerli: {
-      url: goerliRpcUrl,
+      url: `https://goerli.infura.io/v3/${infuraKey}`,
       accounts: [testnetPrivateKey],
+      timeout: 600000,
+    },
+    sepolia: {
+      url: `https://sepolia.infura.io/v3/${infuraKey}`,
+      accounts: [testnetPrivateKey],
+      timeout: 600000,
     },
   },
   etherscan: {
